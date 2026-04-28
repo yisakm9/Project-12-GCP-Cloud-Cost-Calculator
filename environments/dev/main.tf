@@ -82,10 +82,10 @@ resource "google_secret_manager_secret" "sendgrid_api_key" {
 #  5. Pub/Sub — Event-Driven Messaging
 # ──────────────────────────────────────────────
 module "pubsub" {
-  source      = "../../modules/pubsub"
-  project_id  = var.project_id
-  name_prefix = local.name_prefix
-  labels      = local.labels
+  source         = "../../modules/pubsub"
+  project_id     = var.project_id
+  name_prefix    = local.name_prefix
+  labels         = local.labels
 
   depends_on = [module.apis]
 }
