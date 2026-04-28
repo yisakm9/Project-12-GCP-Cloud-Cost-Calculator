@@ -8,7 +8,7 @@
 
 terraform {
   backend "gcs" {
-    bucket = "costcalc-terraform-state-dev"
+    bucket = "costcalc-tfstate-6cdce5b2"
     prefix = "terraform/state"
   }
 }

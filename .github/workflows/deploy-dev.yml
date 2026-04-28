@@ -25,8 +25,8 @@ env:
 
   # ── Workload Identity Federation ──
   # Update these with your project-specific values
-  WIF_PROVIDER: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
-  WIF_SERVICE_ACCOUNT: 'costcalc-dev-github-sa@cloud-cost-calculator-dev.iam.gserviceaccount.com'
+  WIF_PROVIDER: 'projects/501582207385/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+  WIF_SERVICE_ACCOUNT: 'costcalc-dev-github-sa@project-6cdce5b2-1881-424f-a94.iam.gserviceaccount.com'
 
 jobs:
   # ════════════════════════════════════════════
