@@ -20,11 +20,5 @@ resource "google_pubsub_topic" "budget_alerts" {
   message_retention_duration = "86400s"
 }
 
-# Grant the Cloud Billing service account permission to publish
-# budget alert messages to the Pub/Sub topic.
-resource "google_pubsub_topic_iam_member" "billing_publisher" {
-  project = var.project_id
-  topic   = google_pubsub_topic.budget_alerts.name
-  role    = "roles/pubsub.publisher"
-  member  = "serviceAccount:billing-precision@system.gserviceaccount.com"
-}
+# Note: The Cloud Billing service account is granted publish permissions
+# automatically when a google_billing_budget targets this topic.
