@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GCP Cloud Cost Calculator — Dashboard</title>
+    <meta name="description" content="Real-time Google Cloud Platform cost monitoring dashboard with weekly cost breakdown by service, budget alerts, and automated reporting.">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Animated Background Mesh -->
+    <div class="bg-mesh"></div>
+
+    <!-- Header -->
+    <header id="app-header">
+        <div class="header-content">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="#4285F4"/>
+                        <path d="M2 17L12 22L22 17" stroke="#34A853" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M2 12L12 17L22 12" stroke="#FBBC04" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>Cloud Cost Calculator</h1>
+                    <p class="header-subtitle">Google Cloud Platform — Cost Analytics Dashboard</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span id="last-updated" class="timestamp">Loading...</span>
+                <button id="refresh-btn" class="btn-refresh" onclick="refreshData()" title="Refresh Data">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <polyline points="1 20 1 14 7 14"></polyline>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="main-content">
+
+        <!-- Summary Cards Row -->
+        <section id="summary-cards" class="card-grid">
+            <div class="summary-card total-cost" id="card-total-cost">
+                <div class="card-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                </div>
+                <div class="card-data">
+                    <span class="card-label">Net Cost (7 Days)</span>
+                    <span class="card-value" id="total-cost-value">—</span>
+                </div>
+            </div>
+
+            <div class="summary-card credits-card" id="card-credits">
+                <div class="card-icon credits-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                </div>
+                <div class="card-data">
+                    <span class="card-label">Credits Applied</span>
+                    <span class="card-value" id="credits-value">—</span>
+                </div>
+            </div>
+
+            <div class="summary-card services-card" id="card-services">
+                <div class="card-icon services-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                </div>
+                <div class="card-data">
+                    <span class="card-label">Active Services</span>
+                    <span class="card-value" id="services-value">—</span>
+                </div>
+            </div>
+
+            <div class="summary-card period-card" id="card-period">
+                <div class="card-icon period-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                </div>
+                <div class="card-data">
+                    <span class="card-label">Reporting Period</span>
+                    <span class="card-value card-value-sm" id="period-value">—</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts Row -->
+        <section id="charts-section" class="charts-grid">
+            <div class="chart-card" id="bar-chart-card">
+                <h2 class="chart-title">Cost Breakdown by Service</h2>
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card" id="doughnut-chart-card">
+                <h2 class="chart-title">Cost Distribution</h2>
+                <div class="chart-container chart-container-doughnut">
+                    <canvas id="doughnutChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cost Table -->
+        <section id="cost-table-section" class="table-card">
+            <div class="table-header">
+                <h2 class="chart-title">Detailed Cost Breakdown</h2>
+                <span class="table-badge" id="table-count">0 services</span>
+            </div>
+            <div class="table-wrapper">
+                <table id="cost-table" class="cost-table">
+                    <thead>
+                        <tr>
+                            <th class="th-rank">#</th>
+                            <th class="th-service">Service</th>
+                            <th class="th-cost">Gross Cost</th>
+                            <th class="th-credits">Credits</th>
+                            <th class="th-net">Net Cost</th>
+                            <th class="th-bar">Share</th>
+                        </tr>
+                    </thead>
+                    <tbody id="cost-table-body">
+                        <tr><td colspan="6" class="loading-cell">Loading cost data...</td></tr>
+                    </tbody>
+                    <tfoot id="cost-table-footer" style="display: none;">
+                        <tr>
+                            <td></td>
+                            <td class="footer-label">Total Estimated Cost</td>
+                            <td id="footer-gross" class="footer-value">—</td>
+                            <td id="footer-credits" class="footer-value footer-credits">—</td>
+                            <td id="footer-net" class="footer-value footer-net">—</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer id="app-footer">
+        <div class="footer-content">
+            <p>Powered by <strong>BigQuery Billing Export</strong> • Infrastructure as Code with <strong>Terraform</strong></p>
+            <p class="footer-links">
+                <a href="/costs" target="_blank">API Endpoint</a>
+                <span class="dot">•</span>
+                <span>GCP Cloud Cost Calculator</span>
+            </p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

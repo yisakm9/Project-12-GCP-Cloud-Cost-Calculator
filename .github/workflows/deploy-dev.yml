@@ -1,0 +1,213 @@
+# .github/workflows/deploy-dev.yml
+#
+# GCP Cloud Cost Calculator — CI/CD Pipeline
+# 4-stage deployment: Validate → Infrastructure → Build → Deploy Frontend
+
+name: 'Deploy Cloud Cost Calculator — Dev'
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  id-token: write       # Required for Workload Identity Federation
+  contents: read
+  pull-requests: write   # Required for PR plan comments
+
+env:
+  TF_WORKING_DIR: 'environments/dev'
+  GCP_REGION: 'us-central1'
+
+  # ── Workload Identity Federation ──
+  # Update these with your project-specific values
+  WIF_PROVIDER: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+  WIF_SERVICE_ACCOUNT: 'costcalc-dev-github-sa@cloud-cost-calculator-dev.iam.gserviceaccount.com'
+
+jobs:
+  # ════════════════════════════════════════════
+  #  Stage 1: Validate (Lint + Security Scan)
+  # ════════════════════════════════════════════
+  validate:
+    name: '🔍 Validate'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: 'Terraform Format Check'
+        run: terraform fmt -check -recursive -diff
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Setup TFLint'
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: 'Run TFLint'
+        run: tflint --recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Run Checkov Security Scan'
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: ${{ env.TF_WORKING_DIR }}
+          framework: terraform
+          soft_fail: true
+
+  # ════════════════════════════════════════════
+  #  Stage 2: Terraform (Plan + Apply)
+  # ════════════════════════════════════════════
+  terraform:
+    name: '🏗️ Infrastructure'
+    runs-on: ubuntu-latest
+    needs: validate
+
+    outputs:
+      bucket_name: ${{ steps.set-outputs.outputs.bucket_name }}
+      api_url: ${{ steps.set-outputs.outputs.api_url }}
+
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+
+      - name: 'Authenticate to Google Cloud'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: 'Setup Google Cloud SDK'
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: 'Terraform Init'
+        id: init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Terraform Validate'
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Terraform Plan'
+        id: plan
+        if: github.event_name == 'pull_request' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+        run: terraform plan -no-color -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Post Plan to PR'
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### ☁️ Terraform Plan \`${{ steps.plan.outcome }}\`
+            <details><summary>Show Plan Output</summary>
+
+            \`\`\`\n
+            ${process.env.PLAN}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: 'Terraform Apply'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Export Terraform Outputs'
+        id: set-outputs
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          bucket_name=$(terraform output -raw frontend_bucket_name)
+          api_url=$(terraform output -raw cost_api_function_url)
+          echo "bucket_name=$bucket_name" >> $GITHUB_OUTPUT
+          echo "api_url=$api_url" >> $GITHUB_OUTPUT
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  # ════════════════════════════════════════════
+  #  Stage 3: Deploy Frontend to Cloud Storage
+  # ════════════════════════════════════════════
+  deploy-frontend:
+    name: '🚀 Deploy Frontend'
+    runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    env:
+      GCS_BUCKET_NAME: ${{ needs.terraform.outputs.bucket_name }}
+      API_ENDPOINT: ${{ needs.terraform.outputs.api_url }}
+
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+
+      - name: 'Authenticate to Google Cloud'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: 'Setup Google Cloud SDK'
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+
+      - name: 'Inject API Endpoint URL'
+        run: |
+          if [ -z "${{ env.API_ENDPOINT }}" ]; then
+            echo "::error::FATAL: API_ENDPOINT is empty. Cannot proceed."
+            exit 1
+          fi
+          sed -i "s|%%API_ENDPOINT%%|${{ env.API_ENDPOINT }}|g" frontend/public/script.js
+          echo "✅ API endpoint injected: ${{ env.API_ENDPOINT }}"
+
+      - name: 'Deploy Frontend to Cloud Storage'
+        run: |
+          echo "Deploying to bucket: ${{ env.GCS_BUCKET_NAME }}"
+          gsutil -m rsync -r -d \
+            -h "Cache-Control:no-cache, no-store, must-revalidate" \
+            frontend/public/ gs://${{ env.GCS_BUCKET_NAME }}/
+
+      - name: 'Set Content Types'
+        run: |
+          gsutil setmeta -h "Content-Type:text/html" gs://${{ env.GCS_BUCKET_NAME }}/index.html
+          gsutil setmeta -h "Content-Type:text/css" gs://${{ env.GCS_BUCKET_NAME }}/style.css
+          gsutil setmeta -h "Content-Type:application/javascript" gs://${{ env.GCS_BUCKET_NAME }}/script.js
+
+      - name: 'Deployment Summary'
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  ✅ Deployment Complete!"
+          echo "  Dashboard: http://$(cd ${{ env.TF_WORKING_DIR }} && terraform output -raw load_balancer_ip 2>/dev/null || echo 'PENDING')"
+          echo "  API:       ${{ env.API_ENDPOINT }}/costs"
+          echo "════════════════════════════════════════"

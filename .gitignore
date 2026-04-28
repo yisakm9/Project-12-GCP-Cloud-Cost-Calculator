@@ -1,0 +1,39 @@
+# GCP Cloud Cost Calculator — .gitignore
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+crash.log
+
+# Module build artifacts
+modules/cloud_functions/tmp/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — Never commit these
+*.pem
+*.key
+terraform.tfvars.local
+secrets/

@@ -1,0 +1,94 @@
+# .github/workflows/destroy-dev.yml
+#
+# GCP Cloud Cost Calculator — Infrastructure Teardown
+# Manual trigger with safety confirmation.
+
+name: 'Destroy Cloud Cost Calculator — Dev'
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "destroy" to confirm you want to tear down all resources.'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_WORKING_DIR: 'environments/dev'
+  GCP_REGION: 'us-central1'
+
+  # ── Workload Identity Federation ──
+  WIF_PROVIDER: 'projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+  WIF_SERVICE_ACCOUNT: 'costcalc-dev-github-sa@cloud-cost-calculator-dev.iam.gserviceaccount.com'
+
+  CONFIRMATION_PHRASE: 'destroy'
+
+jobs:
+  # ════════════════════════════════════════════
+  #  Stage 1: Verify Confirmation
+  # ════════════════════════════════════════════
+  verify:
+    name: '🔐 Verify Confirmation'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Verify Destroy Confirmation'
+        run: |
+          echo "Verifying confirmation input..."
+          if [ "${{ github.event.inputs.confirmation }}" != "${{ env.CONFIRMATION_PHRASE }}" ]; then
+            echo "❌ ERROR: Confirmation phrase did not match."
+            echo "   Expected: '${{ env.CONFIRMATION_PHRASE }}'"
+            echo "   Received: '${{ github.event.inputs.confirmation }}'"
+            echo "   Aborting destroy operation."
+            exit 1
+          else
+            echo "✅ Confirmation phrase matches. Proceeding with destroy."
+          fi
+
+  # ════════════════════════════════════════════
+  #  Stage 2: Terraform Destroy
+  # ════════════════════════════════════════════
+  destroy:
+    name: '💥 Terraform Destroy'
+    runs-on: ubuntu-latest
+    needs: verify
+
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+
+      - name: 'Authenticate to Google Cloud'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+      - name: 'Setup Google Cloud SDK'
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: 'latest'
+
+      - name: 'Setup Terraform'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.6.0'
+
+      - name: 'Terraform Init'
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Terraform Destroy'
+        run: terraform destroy -auto-approve
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 'Destroy Complete'
+        run: |
+          echo "════════════════════════════════════════"
+          echo "  ✅ All Cloud Cost Calculator resources have been destroyed."
+          echo "  Note: The Terraform state bucket was NOT deleted."
+          echo "  To delete it: gsutil rm -r gs://costcalc-terraform-state-dev"
+          echo "════════════════════════════════════════"
