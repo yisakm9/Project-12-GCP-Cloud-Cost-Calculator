@@ -4,7 +4,7 @@
 
 > This project demonstrates production-grade **cloud engineering**, **Infrastructure as Code**, **serverless architecture**, and **DevSecOps** practices — migrated from AWS to GCP with equivalent or superior service mappings.
 
-![Dashboard Screenshot](docs/dashboard-screenshot.png)
+![Dashboard Screenshot](docs/dashboard-preview.png)
 
 ---
 
