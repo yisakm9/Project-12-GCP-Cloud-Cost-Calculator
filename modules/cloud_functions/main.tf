@@ -157,3 +157,17 @@ resource "google_cloudfunctions2_function" "cost_report" {
 
   labels = var.labels
 }
+
+# Find the project number to use the default compute service account
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
+# Allow the Eventarc trigger (using default compute SA) to invoke the report function
+resource "google_cloud_run_v2_service_iam_member" "cost_report_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloudfunctions2_function.cost_report.service_config[0].service
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
