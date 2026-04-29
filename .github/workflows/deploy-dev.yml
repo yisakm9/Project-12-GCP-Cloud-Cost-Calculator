@@ -194,9 +194,8 @@ jobs:
       - name: 'Deploy Frontend to Cloud Storage'
         run: |
           echo "Deploying to bucket: ${{ env.GCS_BUCKET_NAME }}"
-          gsutil -m rsync -r -d \
-            -h "Cache-Control:no-cache, no-store, must-revalidate" \
-            frontend/public/ gs://${{ env.GCS_BUCKET_NAME }}/
+          gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" \
+            -m rsync -r -d frontend/public/ gs://${{ env.GCS_BUCKET_NAME }}/
 
       - name: 'Set Content Types'
         run: |
