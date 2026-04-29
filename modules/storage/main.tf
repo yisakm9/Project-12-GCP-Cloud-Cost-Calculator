@@ -16,6 +16,12 @@ resource "google_storage_bucket" "frontend" {
     enabled = true
   }
 
+  # Serve index.html when root URL is requested
+  website {
+    main_page_suffix = "index.html"
+    not_found_page   = "index.html"
+  }
+
   # CORS configuration for API calls from the frontend
   cors {
     origin          = ["*"]
